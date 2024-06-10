@@ -197,7 +197,7 @@ outer:
 				err = w.handleManaged(cxt, msg, now)
 			case transport.Oneshot:
 				err = w.handleOneshot(cxt, msg, now)
-			case "":
+			case transport.Cronjob:
 				err = w.handleCronjob(cxt, msg, now)
 			default:
 				err = fmt.Errorf("Task type is not supported: %v", msg.Type)

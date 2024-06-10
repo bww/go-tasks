@@ -13,6 +13,7 @@ type Type string
 const (
 	Managed = Type("managed") // task is managed; we log work, suppress duplicates, retry failures, etc
 	Oneshot = Type("oneshot") // task is executed on a best-effort basis; work is not logged
+	Cronjob = Type("cronjob") // a managed task which isn't fully realized because it is initialized by a cron service
 )
 
 var types = []Type{
