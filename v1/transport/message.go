@@ -31,7 +31,7 @@ type Message struct {
 	Id   ident.Ident `json:"id"`
 	Seq  int64       `json:"seq"` // generally speaking, don't mess with the sequence
 	Type Type        `json:"type"`
-	UTD  string      `json:"utd"`
+	UTD  string      `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
 	Data []byte      `json:"data,omitempty"`
 }
 
@@ -77,11 +77,11 @@ func Parse(m *queue.Message) (*Message, error) {
 			if v, ok := a[attrId]; ok {
 				c.Id, err = ident.Parse(v)
 				if err != nil {
-					return nil, fmt.Errorf("Invalid identifier: %v", err)
+					return nil, fmt.Errorf("Invalid identifier: %w", err)
 				}
 			}
 			if v, ok := a[attrType]; ok {
-				c.Type, err = ParseType(v)
+				err = c.Type.UnmarshalText([]byte(v))
 				if err != nil {
 					return nil, err
 				}
@@ -89,7 +89,7 @@ func Parse(m *queue.Message) (*Message, error) {
 			if v, ok := a[attrSeq]; ok {
 				c.Seq, err = strconv.ParseInt(v, 10, 64)
 				if err != nil {
-					return nil, fmt.Errorf("Invalid sequence: %v", err)
+					return nil, fmt.Errorf("Invalid sequence: %w", err)
 				}
 			}
 			if v, ok := a[attrUTD]; ok {

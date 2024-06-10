@@ -98,7 +98,6 @@ func NewWithConfig(conf Config) (*Executor, error) {
 		queue:    conf.Queue,
 		subscr:   conf.Subscription,
 		log:      conf.Logger.With("system", "tasks"),
-		errs:     make(chan error, 1),
 		verbose:  enableVerbose,
 		debug:    enableDebug,
 	}
@@ -133,6 +132,7 @@ func (w *Executor) Run(cxt context.Context) error {
 }
 
 func (w *Executor) run(cxt context.Context, cn int, name string) error {
+	log := w.log
 	cxt, cancel := context.WithCancel(cxt)
 	defer cancel()
 
@@ -160,7 +160,19 @@ outer:
 
 		msg, err := dlv.Message()
 		if err != nil {
-			w.errs <- err
+			w.Lock()
+			errs := w.errs
+			w.Unlock()
+			if errs == nil {
+				log.With("cause", err).Error("Error receiving message")
+			} else {
+				select {
+				case errs <- err:
+					// error propagated to handlers
+				case <-time.After(defaultTimeout):
+					log.With("cause", err).Error("Timeout while propagating error; moving on")
+				}
+			}
 			continue
 		}
 
@@ -170,14 +182,17 @@ outer:
 		dlv.Ack()
 
 		t := atomic.AddInt64(&total, 1)
+		log := log.With(
+			"utd", msg.UTD,
+			"task_id", msg.Id.String(),
+			"task_type", msg.Type.String(),
+			"task_data", humanize.Bytes(uint64(len(msg.Data))),
+		)
 		if w.Verbose() {
 			f := atomic.LoadInt64(&inflight)
-			w.log.With(
+			log.With(
 				"total", t,
 				"in_flight", f,
-				"utd", msg.UTD,
-				"task_type", msg.Type.String(),
-				"task_data", humanize.Bytes(uint64(len(msg.Data))),
 			).Info("Received task")
 		}
 
@@ -201,7 +216,7 @@ outer:
 			}
 			if err != nil {
 				if msg.Type == transport.Oneshot {
-					w.log.Error(fmt.Sprintf("Task failed: %v", err), "task_id", msg.Id.String(), "task_type", msg.Type.String(), "task_data", humanize.Bytes(uint64(len(msg.Data))), "utd", msg.UTD)
+					log.Error(fmt.Sprintf("Task failed: %v", err))
 				} else {
 					alert.Error(fmt.Errorf("Task failed: %w", err), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_data": humanize.Bytes(uint64(len(msg.Data))), "utd": msg.UTD}))
 				}
@@ -209,14 +224,17 @@ outer:
 		}(msg)
 	}
 
-	w.log.Info(fmt.Sprintf("Waiting for %d tasks to complete...\n", atomic.LoadInt64(&inflight)))
+	log.Info(fmt.Sprintf("Waiting for %d tasks to complete...\n", atomic.LoadInt64(&inflight)))
 	wg.Wait()
-	return nil
+	return ErrStopped
 }
 
 func (w *Executor) Errors() <-chan error {
 	w.Lock()
 	defer w.Unlock()
+	if w.errs == nil {
+		w.errs = make(chan error, 1)
+	}
 	return w.errs
 }
 
@@ -334,10 +352,10 @@ func (w *Executor) handleOneshot(cxt context.Context, msg *transport.Message, no
 func (w *Executor) Exec(cxt context.Context, msg *transport.Message, ent *worklog.Entry) (res tasks.Result, err error) {
 	now := time.Now()
 	log := w.log.With(
+		"utd", msg.UTD,
 		"task_id", msg.Id.String(),
 		"task_type", msg.Type.String(),
 		"task_data", humanize.Bytes(uint64(len(msg.Data))),
-		"utd", msg.UTD,
 	)
 	if ent != nil {
 		log = log.With("worklog", ent.String())
@@ -397,9 +415,9 @@ func (w *Executor) Exec(cxt context.Context, msg *transport.Message, ent *worklo
 		Entity: msg.Data,
 	})
 	if errors.Is(err, tasks.ErrUnsupported) {
-		return res, fmt.Errorf("%w: %s", err, msg.UTD)
+		return res, err
 	} else if errors.Is(err, context.Canceled) {
-		return res, fmt.Errorf("%w: %s", err, msg.UTD)
+		return res, err
 	} else if err != nil {
 		return res, fmt.Errorf("Handler error: %w", err)
 	}

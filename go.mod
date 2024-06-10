@@ -17,7 +17,7 @@ require (
 	github.com/bww/go-metrics v0.1.0
 	github.com/bww/go-queue v1.0.0
 	github.com/bww/go-router v1.9.0
-	github.com/bww/go-util v1.33.0
+	github.com/bww/go-util v1.34.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/orcaman/concurrent-map/v2 v2.0.1
 	github.com/stretchr/testify v1.9.0
@@ -26,6 +26,8 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bww/go-acl v0.2.4 // indirect
+	github.com/bww/go-auth v0.1.2 // indirect
 	github.com/bww/go-xid v0.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

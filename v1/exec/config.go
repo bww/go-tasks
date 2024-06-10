@@ -13,6 +13,8 @@ type Config struct {
 	Concurrency  int
 	EntryTTL     time.Duration // how long are non-terminal entries valid until they expire?
 	Logger       *slog.Logger
+	Debug        bool
+	Verbose      bool
 }
 
 func (c Config) WithOptions(opts []Option) Config {
