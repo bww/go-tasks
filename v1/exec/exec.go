@@ -160,19 +160,7 @@ outer:
 
 		msg, err := dlv.Message()
 		if err != nil {
-			w.Lock()
-			errs := w.errs
-			w.Unlock()
-			if errs == nil {
-				log.With("cause", err).Error("Error receiving message")
-			} else {
-				select {
-				case errs <- err:
-					// error propagated to handlers
-				case <-time.After(defaultTimeout):
-					log.With("cause", err).Error("Timeout while propagating error; moving on")
-				}
-			}
+			w.report(err)
 			continue
 		}
 
@@ -220,6 +208,7 @@ outer:
 				} else {
 					alert.Error(fmt.Errorf("Task failed: %w", err), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_data": humanize.Bytes(uint64(len(msg.Data))), "utd": msg.UTD}))
 				}
+				w.report(err)
 			}
 		}(msg)
 	}
@@ -227,6 +216,23 @@ outer:
 	log.Info(fmt.Sprintf("Waiting for %d tasks to complete...\n", atomic.LoadInt64(&inflight)))
 	wg.Wait()
 	return ErrStopped
+}
+
+func (w *Executor) report(err error) {
+	log := w.log
+	w.Lock()
+	errs := w.errs
+	w.Unlock()
+	if errs == nil {
+		log.With("cause", err).Error("Error receiving message")
+	} else {
+		select {
+		case errs <- err:
+			// error propagated to handlers
+		case <-time.After(defaultTimeout):
+			log.With("cause", err).Error("Timeout while propagating error; moving on")
+		}
+	}
 }
 
 func (w *Executor) Errors() <-chan error {
