@@ -62,15 +62,16 @@ func (q *Queue) Publish(cxt context.Context, m *transport.Message) error {
 
 	if m.Type == transport.Managed && q.log != nil {
 		ent := &worklog.Entry{
-			TaskId:  m.Id,
-			Seq:     m.Seq,
-			UTD:     m.UTD,
-			State:   worklog.Pending,
-			Data:    m.Data,
-			Created: time.Now(),
+			TaskId:   m.Id,
+			TaskSeq:  m.Seq,
+			State:    worklog.Pending,
+			StateSeq: 0,
+			UTD:      m.UTD,
+			Data:     m.Data,
+			Created:  time.Now(),
 		}
 		var err error
-		if ent.Seq == 0 {
+		if ent.TaskSeq == 0 {
 			err = q.log.CreateEntry(cxt, ent)
 		} else {
 			err = q.log.StoreEntry(cxt, ent)

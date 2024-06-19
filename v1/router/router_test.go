@@ -150,7 +150,7 @@ func TestRoutes(t *testing.T) {
 				assert.Equal(t, e.route, x, e.utd)
 				assert.Equal(t, e.vars, v, e.utd)
 				if e.route != nil && assert.NotNil(t, x, e.utd) {
-					_, err := x.Run(context.Background(), tasks.NewRequest(d), tasks.Params{Vars: v})
+					_, err := x.Exec(context.Background(), tasks.NewRequest(d), tasks.Params{Vars: v})
 					assert.Equal(t, errTestOk, err, e.utd)
 				}
 			}
@@ -210,7 +210,7 @@ func TestWildcards(t *testing.T) {
 				assert.Equal(t, e.route, x, e.utd)
 				assert.Equal(t, e.vars, v, e.utd)
 				if e.route != nil && assert.NotNil(t, x, e.utd) {
-					_, err := x.Run(context.Background(), tasks.NewRequest(d), tasks.Params{Vars: v})
+					_, err := x.Exec(context.Background(), tasks.NewRequest(d), tasks.Params{Vars: v})
 					assert.Equal(t, errTestOk, err, e.utd)
 				}
 			}

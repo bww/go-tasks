@@ -33,11 +33,11 @@ type Params struct {
 }
 
 type Task interface {
-	Run(context.Context, *Request, Params) (Result, error)
+	Exec(context.Context, *Request, Params) (Result, error)
 }
 
 type TaskFunc func(context.Context, *Request, Params) (Result, error)
 
-func (f TaskFunc) Run(cxt context.Context, req *Request, params Params) (Result, error) {
+func (f TaskFunc) Exec(cxt context.Context, req *Request, params Params) (Result, error) {
 	return f(cxt, req, params)
 }

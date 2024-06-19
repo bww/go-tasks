@@ -26,15 +26,16 @@ func NewTask(utd string, data []byte) *Task {
 }
 
 type Entry struct {
-	Seq     int64
-	TaskId  ident.Ident
-	UTD     string
-	State   State
-	Data    []byte
-	Error   json.RawMessage
-	Retry   bool
-	Created time.Time
-	Expires *time.Time
+	TaskId   ident.Ident
+	TaskSeq  int64
+	State    State
+	StateSeq int64
+	UTD      string
+	Data     []byte
+	Error    json.RawMessage
+	Retry    bool
+	Created  time.Time
+	Expires  *time.Time
 }
 
 func (e *Entry) Valid(when time.Time) bool {
@@ -52,19 +53,29 @@ func (e *Entry) Resolved() bool {
 }
 
 func (e *Entry) Next(s State, d []byte) *Entry {
+	sseq := e.StateSeq
+	if s != e.State {
+		sseq++ // increment state sequence if the state changes
+	}
 	return &Entry{
-		Seq:     e.Seq + 1,
-		TaskId:  e.TaskId,
-		UTD:     e.UTD,
-		State:   s,
-		Data:    d,
-		Retry:   e.Retry,
-		Created: time.Now(),
+		TaskId:   e.TaskId,
+		TaskSeq:  e.TaskSeq + 1,
+		State:    s,
+		StateSeq: sseq,
+		UTD:      e.UTD,
+		Data:     d,
+		Retry:    e.Retry,
+		Created:  time.Now(),
 	}
 }
 
-func (e *Entry) SetSeq(n int64) *Entry {
-	e.Seq = n
+func (e *Entry) SetTaskSeq(n int64) *Entry {
+	e.TaskSeq = n
+	return e
+}
+
+func (e *Entry) SetStateSeq(n int64) *Entry {
+	e.StateSeq = n
 	return e
 }
 
@@ -94,5 +105,5 @@ func (e *Entry) SetCreated(t time.Time) *Entry {
 }
 
 func (e *Entry) String() string {
-	return fmt.Sprintf("%v:%d", e.TaskId, e.Seq)
+	return fmt.Sprintf("%v:%d", e.TaskId, e.TaskSeq)
 }

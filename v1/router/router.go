@@ -79,8 +79,8 @@ func (r Route) Matches(utd *url.URL, state *matchState) (bool, map[string]string
 }
 
 // Handle the request
-func (r *Route) Run(cxt context.Context, req *tasks.Request, params tasks.Params) (tasks.Result, error) {
-	return r.task.Run(cxt, req, params)
+func (r *Route) Exec(cxt context.Context, req *tasks.Request, params tasks.Params) (tasks.Result, error) {
+	return r.task.Exec(cxt, req, params)
 }
 
 // Describe this route
@@ -113,7 +113,7 @@ func (r *Route) String() string {
 type Router interface {
 	Add(string, tasks.Task) *Route
 	Find(*url.URL) (*Route, path.Vars, error)
-	Run(context.Context, *tasks.Request) (tasks.Result, error)
+	Exec(context.Context, *tasks.Request) (tasks.Result, error)
 	Routes() []*Route
 }
 
@@ -160,8 +160,8 @@ func (r router) Find(utd *url.URL) (*Route, path.Vars, error) {
 	return nil, nil, nil
 }
 
-// Run a task for the provided UTD
-func (r router) Run(cxt context.Context, req *tasks.Request) (tasks.Result, error) {
+// Exec a task for the provided UTD
+func (r router) Exec(cxt context.Context, req *tasks.Request) (tasks.Result, error) {
 	var res tasks.Result
 	if req.UTD == nil {
 		return res, tasks.ErrInvalidRequest
@@ -175,7 +175,7 @@ func (r router) Run(cxt context.Context, req *tasks.Request) (tasks.Result, erro
 	if vars == nil {
 		vars = make(path.Vars)
 	}
-	return match.Run(cxt, req, tasks.Params{
+	return match.Exec(cxt, req, tasks.Params{
 		Vars: vars,
 	})
 }

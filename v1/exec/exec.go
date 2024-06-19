@@ -34,6 +34,7 @@ var (
 	ErrTaskFailed    = errors.New("Task failed")
 	ErrUnsupported   = errors.New("Unsupported operation")
 	ErrInvalidConfig = errors.New("Invalid configuration")
+	ErrUnimplemented = errors.New("Unimplemented")
 )
 
 // the default timeout for operations
@@ -48,8 +49,8 @@ type taskSpec struct {
 
 type Executor struct {
 	sync.Mutex
+	router.Router
 	starter sync.Once
-	router  router.Router
 	worklog worklog.Worklog
 
 	inflight cmap.ConcurrentMap[string, taskSpec]
@@ -91,7 +92,7 @@ func NewWithConfig(conf Config) (*Executor, error) {
 
 	r := router.New()
 	w := &Executor{
-		router:   r,
+		Router:   r,
 		inflight: cmap.New[taskSpec](),
 		cn:       max(1, conf.Concurrency),
 		ttl:      max(time.Minute, conf.EntryTTL), // entry TTL; must be at least a minute
@@ -304,7 +305,7 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 	err = w.worklog.StoreEntry(cxt, next) // Entry must be initialized
 	if err != nil {
 		if ent != nil {
-			return fmt.Errorf("Could not store worklog entry on run (%d → %d): %w", ent.Seq, next.Seq, err)
+			return fmt.Errorf("Could not store worklog entry on run (%d → %d): %w", ent.TaskSeq, next.TaskSeq, err)
 		} else {
 			return fmt.Errorf("Could not store worklog entry on init: %w", err)
 		}
@@ -324,14 +325,14 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		entry:   next,
 	})
 
-	res, err := w.Exec(cxt, msg, next)
+	res, err := w.Proc(cxt, msg, next)
 	if err == nil {
 		next = next.Next(worklog.Complete, res.State)
 	} else {
 		next = next.Next(stateForError(err), res.State).SetRetry(errutil.Recoverable(err))
 		errdat, suberr := json.Marshal(jsonError{Err: err})
 		if suberr != nil {
-			alert.Error(fmt.Errorf("Could not marshal worklog error on failure: %v", suberr), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_seq": fmt.Sprint(next.Seq)}))
+			alert.Error(fmt.Errorf("Could not marshal worklog error on failure: %v", suberr), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_seq": fmt.Sprint(next.TaskSeq)}))
 		} else {
 			next = next.SetError(errdat)
 		}
@@ -344,18 +345,18 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 	defer cancel()
 	suberr := w.worklog.StoreEntry(subcxt, next)
 	if suberr != nil {
-		alert.Error(fmt.Errorf("Could not store worklog entry on success: %w", suberr), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_seq": fmt.Sprint(next.Seq)}))
+		alert.Error(fmt.Errorf("Could not store worklog entry on success: %w", suberr), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_seq": fmt.Sprint(next.TaskSeq)}))
 	}
 
 	return err
 }
 
 func (w *Executor) handleOneshot(cxt context.Context, msg *transport.Message, now time.Time) error {
-	_, err := w.Exec(cxt, msg, nil)
+	_, err := w.Proc(cxt, msg, nil)
 	return err
 }
 
-func (w *Executor) Exec(cxt context.Context, msg *transport.Message, ent *worklog.Entry) (res tasks.Result, err error) {
+func (w *Executor) Proc(cxt context.Context, msg *transport.Message, ent *worklog.Entry) (res tasks.Result, err error) {
 	now := time.Now()
 	log := w.log.With(
 		"utd", msg.UTD,
@@ -416,7 +417,7 @@ func (w *Executor) Exec(cxt context.Context, msg *transport.Message, ent *worklo
 		}()
 	}
 
-	res, err = w.router.Run(cxt, &tasks.Request{
+	res, err = w.Router.Exec(cxt, &tasks.Request{
 		UTD:    u,
 		Entity: msg.Data,
 	})
