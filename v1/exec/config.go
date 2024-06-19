@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"github.com/bww/go-tasks/v1"
+	"github.com/bww/go-tasks/v1/worklog"
 )
 
 type Config struct {
 	Queue        *tasks.Queue
+	Worklog      worklog.Worklog
 	Subscription string
 	Concurrency  int
 	EntryTTL     time.Duration // how long are non-terminal entries valid until they expire?
@@ -29,6 +31,13 @@ type Option func(Config) Config
 func WithQueue(v *tasks.Queue) Option {
 	return func(c Config) Config {
 		c.Queue = v
+		return c
+	}
+}
+
+func WithWorklog(v worklog.Worklog) Option {
+	return func(c Config) Config {
+		c.Worklog = v
 		return c
 	}
 }

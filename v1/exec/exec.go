@@ -97,6 +97,7 @@ func NewWithConfig(conf Config) (*Executor, error) {
 		cn:       max(1, conf.Concurrency),
 		ttl:      max(time.Minute, conf.EntryTTL), // entry TTL; must be at least a minute
 		queue:    conf.Queue,
+		worklog:  conf.Worklog,
 		subscr:   conf.Subscription,
 		log:      conf.Logger.With("system", "tasks"),
 		verbose:  enableVerbose,
