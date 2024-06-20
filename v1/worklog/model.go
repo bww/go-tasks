@@ -52,6 +52,11 @@ func (e *Entry) Resolved() bool {
 	return e.State.Resolved()
 }
 
+func (e *Entry) Clone() *Entry {
+	d := *e
+	return &d
+}
+
 func (e *Entry) Next(s State, d []byte) *Entry {
 	sseq := e.StateSeq
 	if s != e.State {

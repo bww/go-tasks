@@ -8,7 +8,10 @@ import (
 	"github.com/bww/go-ident/v1"
 )
 
-var ErrNotFound = errors.New("Not found")
+var (
+	ErrNotFound = errors.New("Not found")
+	ErrConflict = errors.New("Sequence conflict")
+)
 
 type Worklog interface {
 	CreateEntry(context.Context, *Entry) error

@@ -37,6 +37,16 @@ var states = map[State]string{
 	Unknown:  "Unknown",
 }
 
+var resolvedStates = []State{
+	Complete,
+	Canceled,
+	Failed,
+}
+
+func ResolvedStates() []State {
+	return resolvedStates
+}
+
 func ParseState(s string) (State, error) {
 	c := State(s)
 	_, ok := states[c]
