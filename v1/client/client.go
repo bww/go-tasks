@@ -7,6 +7,10 @@ import (
 	"github.com/bww/go-tasks/v1/transport"
 )
 
+var (
+	jsonContentType = api.WithHeader("Content-Type", "application/json")
+)
+
 type Client struct {
 	*api.Client
 	sync bool
@@ -19,7 +23,7 @@ func NewWithConfig(conf Config) *Client {
 	}
 }
 
-func (c *Client) Submit(cxt context.Context, msg transport.Message) error {
+func (c *Client) Submit(cxt context.Context, msg *transport.Message) error {
 	if c.sync {
 		return c.Execute(cxt, msg)
 	} else {
@@ -27,16 +31,16 @@ func (c *Client) Submit(cxt context.Context, msg transport.Message) error {
 	}
 }
 
-func (c *Client) Execute(cxt context.Context, msg transport.Message) error {
-	_, err := c.Client.Post(cxt, "v1/tasks", msg, nil)
+func (c *Client) Execute(cxt context.Context, msg *transport.Message) error {
+	_, err := c.Client.Post(cxt, "v1/tasks", msg, nil, jsonContentType)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) Publish(cxt context.Context, msg transport.Message) error {
-	_, err := c.Client.Post(cxt, "v1/queue", msg, nil)
+func (c *Client) Publish(cxt context.Context, msg *transport.Message) error {
+	_, err := c.Client.Post(cxt, "v1/queue", msg, nil, jsonContentType)
 	if err != nil {
 		return err
 	}
