@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/bww/go-tasks/v1/transport"
 	"github.com/bww/go-util/v1/urls"
 	"github.com/bww/go-validate/v1"
+	"github.com/dustin/go-humanize"
 )
 
 const (
@@ -37,6 +39,7 @@ type Service struct {
 	addr  string
 	queue *tasks.Queue
 	exec  *exec.Executor
+	log   *slog.Logger
 }
 
 func NewWithConfig(conf Config) (*Service, error) {
@@ -57,6 +60,7 @@ func NewWithConfig(conf Config) (*Service, error) {
 		addr:    conf.Addr,
 		queue:   conf.Queue,
 		exec:    conf.Exec,
+		log:     slog.With("service", "tasks"),
 	}
 
 	// Obtain the status of this service; this can be used as a health check
@@ -109,6 +113,7 @@ func (s *Service) handleWriteQueue(req *router.Request, cxt router.Context) (*ro
 		return nil, resterrs.Errorf(http.StatusBadRequest, "Invalid entity").SetFieldErrors(errs)
 	}
 
+	s.log.With("utd", msg.UTD, "size", humanize.Bytes(uint64(len(msg.Data)))).Info("Publish task")
 	err = s.queue.Publish(req.Context(), msg)
 	if err != nil {
 		return nil, resterrs.Errorf(http.StatusBadGateway, "Could not publish task").SetCause(err)
@@ -132,6 +137,7 @@ func (s *Service) handleExecTask(req *router.Request, cxt router.Context) (*rout
 		return nil, resterrs.Errorf(http.StatusBadRequest, "Invalid entity").SetFieldErrors(errs)
 	}
 
+	s.log.With("utd", msg.UTD, "size", humanize.Bytes(uint64(len(msg.Data)))).Info("Execute task (synchronous)")
 	res, err := s.exec.Proc(req.Context(), msg, nil)
 	if err != nil {
 		return nil, resterrs.Errorf(http.StatusBadGateway, "%s", err.Error()).SetCause(err)
