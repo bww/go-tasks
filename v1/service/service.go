@@ -14,6 +14,7 @@ import (
 	"github.com/bww/go-rest/v2/response"
 	"github.com/bww/go-router/v2"
 	"github.com/bww/go-tasks/v1"
+	"github.com/bww/go-tasks/v1/exec"
 	"github.com/bww/go-tasks/v1/transport"
 	"github.com/bww/go-util/v1/urls"
 	"github.com/bww/go-validate/v1"
@@ -23,6 +24,7 @@ const (
 	ControlRealm = "control"
 	DataRealm    = "data"
 
+	ExecResource  = "exec"
 	QueueResource = "queue"
 )
 
@@ -34,6 +36,7 @@ type Service struct {
 	*rest.Service
 	addr  string
 	queue *tasks.Queue
+	exec  *exec.Executor
 }
 
 func NewWithConfig(conf Config) (*Service, error) {
@@ -53,11 +56,15 @@ func NewWithConfig(conf Config) (*Service, error) {
 		Service: r,
 		addr:    conf.Addr,
 		queue:   conf.Queue,
+		exec:    conf.Exec,
 	}
 
+	// Obtain the status of this service; this can be used as a health check
 	r.Add(urls.Join(conf.Prefix, "/status"), s.handleStatus).Methods("GET")
-	r.Add(urls.Join(conf.Prefix, "/v1/queue"), s.handleWriteQueue).Methods("POST").
-		Use(middle.ACL(jwtacl, dataRealm, scope(QueueResource, acl.Write)))
+	// Submit a task to the queue so it can be scheduled for normal execution; this is the way work is normally submitted to the service
+	r.Add(urls.Join(conf.Prefix, "/v1/queue"), s.handleWriteQueue).Methods("POST").Use(middle.ACL(jwtacl, dataRealm, scope(QueueResource, acl.Write)))
+	// Submit a task DIRECTLY to the local executor and wait for it to finish SYNCHRONOUSLY; this is really only intended for testing scenarios
+	r.Add(urls.Join(conf.Prefix, "/v1/tasks"), s.handleExecTask).Methods("POST").Use(middle.ACL(jwtacl, dataRealm, scope(ExecResource, acl.Write)))
 
 	return s, nil
 }
@@ -108,4 +115,27 @@ func (s *Service) handleWriteQueue(req *router.Request, cxt router.Context) (*ro
 	}
 
 	return response.Success(msg), nil
+}
+
+func (s *Service) handleExecTask(req *router.Request, cxt router.Context) (*router.Response, error) {
+	if s.exec == nil {
+		return nil, resterrs.Errorf(http.StatusServiceUnavailable, "Task executor is not available")
+	}
+
+	var msg *transport.Message
+	err := httputil.Unmarshal(req, &msg)
+	if err != nil {
+		return nil, resterrs.Errorf(http.StatusBadRequest, "Could not unmarshal entity").SetCause(err)
+	}
+	errs := validate.New().Validate(msg)
+	if len(errs) > 0 {
+		return nil, resterrs.Errorf(http.StatusBadRequest, "Invalid entity").SetFieldErrors(errs)
+	}
+
+	res, err := s.exec.Proc(req.Context(), msg, nil)
+	if err != nil {
+		return nil, resterrs.Errorf(http.StatusBadGateway, "%s", err.Error()).SetCause(err)
+	}
+
+	return response.Success(res), nil
 }
