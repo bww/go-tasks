@@ -21,7 +21,7 @@ func (r *Request) WithEntity(data []byte) *Request {
 }
 
 type Result struct {
-	State []byte
+	State []byte `json:"state"`
 }
 
 func (r Result) WithState(b []byte) Result {
