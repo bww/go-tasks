@@ -74,6 +74,11 @@ func (e *Entry) Next(s State, d []byte) *Entry {
 	}
 }
 
+func (e *Entry) IncTaskSeq() *Entry {
+	e.TaskSeq++
+	return e
+}
+
 func (e *Entry) SetTaskSeq(n int64) *Entry {
 	e.TaskSeq = n
 	return e
