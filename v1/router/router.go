@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -170,7 +171,7 @@ func (r router) Exec(cxt context.Context, req *tasks.Request) (tasks.Result, err
 	if err != nil {
 		return res, err
 	} else if match == nil {
-		return res, tasks.ErrUnsupported
+		return res, fmt.Errorf("%w: %v", tasks.ErrUnsupported, req.UTD)
 	}
 	if vars == nil {
 		vars = make(path.Vars)
