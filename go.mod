@@ -10,10 +10,10 @@ require (
 	github.com/bww/go-ident v0.1.0
 	github.com/bww/go-metrics v0.1.0
 	github.com/bww/go-queue v1.0.0
-	github.com/bww/go-rest/v2 v2.0.2
+	github.com/bww/go-rest/v2 v2.0.4
 	github.com/bww/go-router v1.9.0
-	github.com/bww/go-router/v2 v2.2.0
-	github.com/bww/go-util v1.34.0
+	github.com/bww/go-router/v2 v2.4.3
+	github.com/bww/go-util v1.38.0
 	github.com/bww/go-validate v1.10.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/orcaman/concurrent-map/v2 v2.0.1
