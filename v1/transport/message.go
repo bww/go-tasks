@@ -3,14 +3,15 @@ package transport
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strconv"
-
-	"github.com/bww/go-tasks/v1/worklog"
 
 	"github.com/bww/go-ident/v1"
 	"github.com/bww/go-queue/v1"
+	"github.com/bww/go-tasks/v1/attrs"
 )
+
+var errEncodingNotSupported = errors.New("Encoding is not longer supported")
 
 const (
 	attrId   = "id"
@@ -25,14 +26,13 @@ const (
 	mimeInline = "tasks/inline" // mimeInline is the MIME type for the inlined encoding format
 )
 
-const utdMaxLength = 1024
-
 type Message struct {
-	Id   ident.Ident `json:"id"`
-	Seq  int64       `json:"seq"` // generally speaking, don't mess with the sequence
-	Type Type        `json:"type"`
-	UTD  string      `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
-	Data []byte      `json:"data,omitempty"`
+	Id    ident.Ident      `json:"id"`
+	Seq   int64            `json:"seq"` // generally speaking, don't mess with the sequence
+	Type  Type             `json:"type"`
+	UTD   string           `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
+	Data  []byte           `json:"data,omitempty"`
+	Attrs attrs.Attributes `json:"attrs,omitempty"`
 }
 
 func New(utd string) *Message {
@@ -50,66 +50,23 @@ func NewWithId(id ident.Ident, utd string) *Message {
 	}
 }
 
-func NewFromTask(t *worklog.Task) *Message {
-	return &Message{
-		Id:   t.Id,
-		Type: Managed,
-		UTD:  t.UTD,
-		Data: t.Data,
-	}
-}
-
 func Parse(m *queue.Message) (*Message, error) {
-	var err error
-	c := &Message{}
-
-	var inline bool
-	if a := m.Attributes; len(a) > 0 {
-		// if we are using inline encoding, we decode the message from the
-		// queue payload; otherwise we extract headers
-		if v, ok := a[attrMime]; ok && v == mimeInline {
-			inline = true
-			err = json.Unmarshal(m.Data, c)
-			if err != nil {
-				return nil, fmt.Errorf("Unable to decode inline data: %w", err)
-			}
-		} else {
-			if v, ok := a[attrId]; ok {
-				c.Id, err = ident.Parse(v)
-				if err != nil {
-					return nil, fmt.Errorf("Invalid identifier: %w", err)
-				}
-			}
-			if v, ok := a[attrType]; ok {
-				err = c.Type.UnmarshalText([]byte(v))
-				if err != nil {
-					return nil, err
-				}
-			}
-			if v, ok := a[attrSeq]; ok {
-				c.Seq, err = strconv.ParseInt(v, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("Invalid sequence: %w", err)
-				}
-			}
-			if v, ok := a[attrUTD]; ok {
-				c.UTD = v
-			}
-		}
+	// if we are using inline encoding, we decode the message from the
+	// queue payload; otherwise we extract headers
+	if v, ok := m.Attributes[attrMime]; ok && v != mimeInline {
+		return nil, fmt.Errorf("%w: Header-based attributes", errEncodingNotSupported)
 	}
 
-	// If no UTD is set at this point, we assume the payload is the UTD;
-	// this was used to support the use of Cloud Scheduler to schedule
-	// tasks before it supported configuring attributes. It should not
-	// actually be used anymore, although we haven't gone through to
-	// check all the configurations to ensure that is the case.
+	c := Message{}
+	err := json.Unmarshal(m.Data, &c)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode inline message data: %w", err)
+	}
 	if c.UTD == "" {
-		c.UTD = string(m.Data)
-	} else if !inline {
-		c.Data = m.Data
+		return nil, fmt.Errorf("%w: Payload-based UTD", errEncodingNotSupported)
 	}
 
-	return c, nil
+	return &c, nil
 }
 
 func (m *Message) SetData(d []byte) *Message {
@@ -117,37 +74,33 @@ func (m *Message) SetData(d []byte) *Message {
 	return m
 }
 
-func (m *Message) Encode() (*queue.Message, error) {
-	return m.encode(utdMaxLength)
+func (m *Message) SetAttrs(a attrs.Attributes) *Message {
+	m.Attrs = a
+	return m
 }
 
-func (m *Message) encode(maxlen int) (*queue.Message, error) {
-	// if the UTD's length exceeds the maximum allowed length (this is a
-	// limitation of PubSub's message attributes), we use the alternate
-	// inline encoding.
-	if len(m.UTD) > maxlen {
-		data, err := json.Marshal(m)
-		if err != nil {
-			return nil, fmt.Errorf("Could not encode message (inline): %w", err)
-		}
-		return &queue.Message{
-			Attributes: queue.Attributes{
-				attrMime: mimeInline,
-			},
-			Data: data,
-		}, nil
-	} else {
-		return &queue.Message{
-			Attributes: queue.Attributes{
-				attrId:   m.Id.String(),
-				attrType: m.Type.String(),
-				attrUTD:  m.UTD,
-				attrSeq:  strconv.FormatInt(m.Seq, 10),
-				attrMime: mimeHeader, // we provide this as an advisory, but it is also assumed
-			},
-			Data: m.Data,
-		}, nil
+func (m *Message) SetAttr(k, v string) *Message {
+	if m.Attrs == nil {
+		m.Attrs = make(attrs.Attributes)
 	}
+	m.Attrs[k] = v
+	return m
+}
+
+func (m *Message) Encode() (*queue.Message, error) {
+	// only inline encoding is supported now
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf("Could not encode message: %w", err)
+	}
+	return &queue.Message{
+		Attributes: queue.Attributes{
+			attrId:   m.Id.String(),
+			attrType: m.Type.String(),
+			attrMime: mimeInline,
+		},
+		Data: data,
+	}, nil
 }
 
 func (m *Message) String() string {

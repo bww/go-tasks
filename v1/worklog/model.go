@@ -6,24 +6,12 @@ import (
 	"time"
 
 	"github.com/bww/go-ident/v1"
+	"github.com/bww/go-tasks/v1/attrs"
 )
 
-type Task struct {
-	Id      ident.Ident // This must be generated in lexical descending order
-	UTD     string
-	Data    []byte
-	Created time.Time
-}
-
-func NewTask(utd string, data []byte) *Task {
-	now := time.Now()
-	return &Task{
-		Id:      ident.DscWithTime(now),
-		UTD:     utd,
-		Data:    data,
-		Created: now,
-	}
-}
+const (
+	AttrRetries = "retries"
+)
 
 type Entry struct {
 	TaskId   ident.Ident
@@ -32,6 +20,7 @@ type Entry struct {
 	StateSeq int64
 	UTD      string
 	Data     []byte
+	Attrs    attrs.Attributes
 	Error    json.RawMessage
 	Retry    bool
 	Created  time.Time
@@ -58,9 +47,16 @@ func (e *Entry) Clone() *Entry {
 }
 
 func (e *Entry) Next(s State, d []byte) *Entry {
+	return e.NextWithAttrs(s, d, nil)
+}
+
+func (e *Entry) NextWithAttrs(s State, d []byte, a attrs.Attributes) *Entry {
 	sseq := e.StateSeq
 	if s != e.State {
 		sseq++ // increment state sequence if the state changes
+	}
+	if a == nil {
+		a = e.Attrs // prefer provided attributes to inherited ones
 	}
 	return &Entry{
 		TaskId:   e.TaskId,
@@ -69,6 +65,7 @@ func (e *Entry) Next(s State, d []byte) *Entry {
 		StateSeq: sseq,
 		UTD:      e.UTD,
 		Data:     d,
+		Attrs:    a,
 		Retry:    e.Retry,
 		Created:  time.Now(),
 	}
@@ -91,6 +88,11 @@ func (e *Entry) SetStateSeq(n int64) *Entry {
 
 func (e *Entry) SetData(d []byte) *Entry {
 	e.Data = d
+	return e
+}
+
+func (e *Entry) SetAttrs(a attrs.Attributes) *Entry {
+	e.Attrs = a
 	return e
 }
 

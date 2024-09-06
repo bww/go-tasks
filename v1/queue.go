@@ -68,6 +68,7 @@ func (q *Queue) Publish(cxt context.Context, m *transport.Message) error {
 			StateSeq: 0,
 			UTD:      m.UTD,
 			Data:     m.Data,
+			Attrs:    m.Attrs,
 			Created:  time.Now(),
 		}
 		var err error
