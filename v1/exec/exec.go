@@ -6,14 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"runtime/debug"
+	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/bww/go-tasks/v1"
+	"github.com/bww/go-tasks/v1/attrs"
 	"github.com/bww/go-tasks/v1/router"
 	"github.com/bww/go-tasks/v1/transport"
 	"github.com/bww/go-tasks/v1/worklog"
@@ -22,6 +26,8 @@ import (
 	"github.com/bww/go-ident/v1"
 	"github.com/bww/go-metrics/v1"
 	errutil "github.com/bww/go-util/v1/errors"
+	"github.com/bww/go-util/v1/ext"
+	sliceutil "github.com/bww/go-util/v1/slices"
 	"github.com/bww/go-util/v1/text"
 	"github.com/dustin/go-humanize"
 	cmap "github.com/orcaman/concurrent-map/v2"
@@ -172,12 +178,7 @@ outer:
 		dlv.Ack()
 
 		t := atomic.AddInt64(&total, 1)
-		log := log.With(
-			"utd", msg.UTD,
-			"task_id", msg.Id.String(),
-			"task_type", msg.Type.String(),
-			"task_data", humanize.Bytes(uint64(len(msg.Data))),
-		)
+		log := msgLog(slog.Default(), msg)
 		if w.Verbose() {
 			f := atomic.LoadInt64(&inflight)
 			log.With(
@@ -208,7 +209,7 @@ outer:
 				if msg.Type == transport.Oneshot {
 					log.Error(fmt.Sprintf("Task failed: %v", err))
 				} else {
-					alert.Error(fmt.Errorf("Task failed: %w", err), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_data": humanize.Bytes(uint64(len(msg.Data))), "utd": msg.UTD}))
+					alert.Error(fmt.Errorf("Task failed: %w", err), alert.WithTags(msgTags(msg)))
 				}
 				w.report(err)
 			}
@@ -292,13 +293,20 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		} else if ent.State == worklog.Running && ent.Valid(now) {
 			return fmt.Errorf("Task is already running since: %v", ent.Created)
 		}
-		next = ent.Next(worklog.Running, msg.Data)
+		next = ent.NextWithAttrs(worklog.Running, msg.Data, msg.Attrs)
 	} else {
+		var a attrs.Attributes
+		if msg.Attrs != nil {
+			a = msg.Attrs
+		} else {
+			a = ent.Attrs // prefer provided attributes to inherited ones
+		}
 		next = &worklog.Entry{
 			TaskId:  msg.Id,
 			UTD:     msg.UTD,
 			State:   worklog.Running,
 			Data:    msg.Data,
+			Attrs:   a,
 			Created: now,
 		}
 	}
@@ -333,7 +341,7 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		next = next.Next(stateForError(err), res.State).SetRetry(errutil.Recoverable(err))
 		errdat, suberr := json.Marshal(jsonError{Err: err})
 		if suberr != nil {
-			alert.Error(fmt.Errorf("Could not marshal worklog error on failure: %v", suberr), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_seq": fmt.Sprint(next.TaskSeq)}))
+			alert.Error(fmt.Errorf("Could not marshal worklog error on failure: %v", suberr), alert.WithTags(msgTags(msg, alert.Tags{"task_seq": fmt.Sprint(next.TaskSeq)})))
 		} else {
 			next = next.SetError(errdat)
 		}
@@ -346,7 +354,7 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 	defer cancel()
 	suberr := w.worklog.StoreEntry(subcxt, next)
 	if suberr != nil {
-		alert.Error(fmt.Errorf("Could not store worklog entry on success: %w", suberr), alert.WithTags(alert.Tags{"task_id": msg.Id, "task_type": msg.Type, "task_seq": fmt.Sprint(next.TaskSeq)}))
+		alert.Error(fmt.Errorf("Could not store worklog entry on success: %w", suberr), alert.WithTags(msgTags(msg, alert.Tags{"task_seq": fmt.Sprint(next.TaskSeq)})))
 	}
 
 	return err
@@ -359,12 +367,7 @@ func (w *Executor) handleOneshot(cxt context.Context, msg *transport.Message, no
 
 func (w *Executor) Proc(cxt context.Context, msg *transport.Message, ent *worklog.Entry) (res tasks.Result, err error) {
 	now := time.Now()
-	log := w.log.With(
-		"utd", msg.UTD,
-		"task_id", msg.Id.String(),
-		"task_type", msg.Type.String(),
-		"task_data", humanize.Bytes(uint64(len(msg.Data))),
-	)
+	log := msgLog(w.log, msg)
 	if ent != nil {
 		log = log.With("worklog", ent.String())
 	}
@@ -411,7 +414,7 @@ func (w *Executor) Proc(cxt context.Context, msg *transport.Message, ent *worklo
 					prv := ent
 					ent, err = w.worklog.RenewEntry(cxt, ent, now.Add(w.ttl))
 					if err != nil {
-						alert.Error(fmt.Errorf("Could not renew worklog entry: %v", err), alert.WithTags(alert.Tags{"task_id": msg.Id, "utd": msg.UTD, "worklog": prv.String()}))
+						alert.Error(fmt.Errorf("Could not renew worklog entry: %v", err), alert.WithTags(msgTags(msg, alert.Tags{"worklog": prv.String()})))
 					}
 				}
 			}
@@ -434,4 +437,35 @@ func (w *Executor) Proc(cxt context.Context, msg *transport.Message, ent *worklo
 		log.Debug("Task completed", "duration", time.Since(now))
 	}
 	return res, nil
+}
+
+func msgLog(base *slog.Logger, msg *transport.Message) *slog.Logger {
+	if base == nil {
+		base = slog.Default()
+	}
+	alen := len(msg.Attrs)
+	return base.With(
+		"utd", msg.UTD,
+		"task_id", msg.Id.String(),
+		"task_type", msg.Type.String(),
+		"task_data", humanize.Bytes(uint64(len(msg.Data))),
+		"task_attrs", ext.Choose(alen > 0, sliceutil.Summary(slices.Collect(maps.Keys(msg.Attrs)), ",", "...", 3), strconv.Itoa(alen)),
+	)
+}
+
+func msgTags(msg *transport.Message, merge ...alert.Tags) alert.Tags {
+	alen := len(msg.Attrs)
+	t := alert.Tags{
+		"utd":        msg.UTD,
+		"task_id":    msg.Id,
+		"task_type":  msg.Type,
+		"task_data":  humanize.Bytes(uint64(len(msg.Data))),
+		"task_attrs": ext.Choose(alen > 0, sliceutil.Summary(slices.Collect(maps.Keys(msg.Attrs)), ",", "...", 3), strconv.Itoa(alen)),
+	}
+	for _, m := range merge {
+		for k, v := range m {
+			t[k] = v
+		}
+	}
+	return t
 }
