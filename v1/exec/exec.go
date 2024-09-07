@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/bww/go-tasks/v1"
-	"github.com/bww/go-tasks/v1/attrs"
 	"github.com/bww/go-tasks/v1/router"
 	"github.com/bww/go-tasks/v1/transport"
 	"github.com/bww/go-tasks/v1/worklog"
@@ -295,18 +294,12 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		}
 		next = ent.NextWithAttrs(worklog.Running, msg.Data, msg.Attrs)
 	} else {
-		var a attrs.Attributes
-		if msg.Attrs != nil {
-			a = msg.Attrs
-		} else {
-			a = ent.Attrs // prefer provided attributes to inherited ones
-		}
 		next = &worklog.Entry{
 			TaskId:  msg.Id,
 			UTD:     msg.UTD,
 			State:   worklog.Running,
 			Data:    msg.Data,
-			Attrs:   a,
+			Attrs:   msg.Attrs,
 			Created: now,
 		}
 	}
