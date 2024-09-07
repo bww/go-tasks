@@ -50,11 +50,14 @@ func (q *Queue) Worklog() worklog.Worklog {
 	return q.log
 }
 
-func (q *Queue) Publish(cxt context.Context, m *transport.Message) error {
+func (q *Queue) Publish(cxt context.Context, m *transport.Message, opts ...PublishOption) error {
+	conf := PublishConfig{
+		StateSeq: 0,
+	}.WithOptions(opts)
+
 	if m.Id == ident.Zero {
 		m.Id = ident.New()
 	}
-
 	c, err := m.Encode()
 	if err != nil {
 		return err
@@ -65,7 +68,7 @@ func (q *Queue) Publish(cxt context.Context, m *transport.Message) error {
 			TaskId:   m.Id,
 			TaskSeq:  m.Seq,
 			State:    worklog.Pending,
-			StateSeq: 0,
+			StateSeq: conf.StateSeq,
 			UTD:      m.UTD,
 			Data:     m.Data,
 			Attrs:    m.Attrs,
