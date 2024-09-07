@@ -31,5 +31,5 @@ type Worklog interface {
 	FetchLatestEntryForTask(context.Context, ident.Ident) (*Entry, error)
 	IterLatestEntryForEveryTask(context.Context, Criteria, time.Time) (siter.Iterator[*Entry], error)
 
-	DeleteTask(context.Context, ident.Ident) error
+	DeleteEveryEntryForTask(context.Context, ident.Ident) error
 }
