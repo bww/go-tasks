@@ -58,6 +58,7 @@ type Executor struct {
 	starter sync.Once
 	worklog worklog.Worklog
 
+	nodename string
 	inflight cmap.ConcurrentMap[string, taskSpec]
 	cn       int
 	ttl      time.Duration
@@ -67,6 +68,7 @@ type Executor struct {
 	errs     chan error
 	verbose  bool
 	debug    bool
+	runid    uint64
 
 	metrics            *metrics.Metrics
 	taskSuccessCounter metrics.Counter
@@ -92,12 +94,26 @@ func NewWithConfig(conf Config) (*Executor, error) {
 		conf.Logger = slog.Default()
 	}
 
+	var (
+		nodename string
+		err      error
+	)
+	if n := conf.Nodename; n != "" {
+		nodename = n
+	} else {
+		nodename, err = os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("No node name provided and could not obtain host name: %w", err)
+		}
+	}
+
 	enableVerbose := text.Coalesce(os.Getenv("VERBOSE_WORKER"), os.Getenv("VERBOSE")) != ""
 	enableDebug := text.Coalesce(os.Getenv("DEBUG_WORKER"), os.Getenv("DEBUG")) != ""
 
 	r := router.New()
 	w := &Executor{
 		Router:   r,
+		nodename: nodename,
 		inflight: cmap.New[taskSpec](),
 		cn:       max(1, conf.Concurrency),
 		ttl:      max(time.Minute, conf.EntryTTL), // entry TTL; must be at least a minute
@@ -136,6 +152,11 @@ func (w *Executor) Run(cxt context.Context) error {
 	subscr := w.subscr
 	w.Unlock()
 	return w.run(cxt, cn, subscr)
+}
+
+func (w *Executor) nextRun() string {
+	n := atomic.AddUint64(&w.runid, 1)
+	return tasks.Run(w.nodename, n)
 }
 
 func (w *Executor) run(cxt context.Context, cn int, name string) error {
@@ -415,6 +436,7 @@ func (w *Executor) Proc(cxt context.Context, msg *transport.Message, ent *worklo
 	}
 
 	res, err = w.Router.Exec(cxt, &tasks.Request{
+		Run:    w.nextRun(),
 		UTD:    u,
 		Entity: msg.Data,
 	})

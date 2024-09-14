@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	Nodename     string // the name of this node in the task cluster; by defualt we use the hostname
 	Queue        *tasks.Queue
 	Worklog      worklog.Worklog
 	Subscription string
