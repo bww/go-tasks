@@ -4,17 +4,17 @@ go 1.23.1
 
 require (
 	github.com/bww/go-acl v0.2.4
-	github.com/bww/go-alert v0.1.0
+	github.com/bww/go-alert v0.2.0
 	github.com/bww/go-apiclient v0.1.2
 	github.com/bww/go-auth v0.1.2
 	github.com/bww/go-ident v0.1.0
 	github.com/bww/go-iterator v0.1.0
 	github.com/bww/go-metrics v0.1.0
 	github.com/bww/go-queue v1.0.0
-	github.com/bww/go-rest/v2 v2.0.4
+	github.com/bww/go-rest/v2 v2.5.0
 	github.com/bww/go-router v1.9.0
 	github.com/bww/go-router/v2 v2.4.3
-	github.com/bww/go-util v1.41.0
+	github.com/bww/go-util v1.43.0
 	github.com/bww/go-validate v1.10.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/orcaman/concurrent-map/v2 v2.0.1
@@ -32,7 +32,8 @@ require (
 	github.com/getsentry/sentry-go v0.28.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/gorilla/schema v1.3.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.2 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

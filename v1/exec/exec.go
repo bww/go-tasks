@@ -226,8 +226,10 @@ outer:
 				err = fmt.Errorf("Task type is not supported: %v", msg.Type)
 			}
 			if err != nil {
+				err := errutil.Reference(err)
+				fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> IS THIS HAPPENING?", err, err.Reference())
 				if msg.Type == transport.Oneshot {
-					log.Error(fmt.Sprintf("Task failed: %v", err))
+					logerr(log, fmt.Errorf("Task failed: %v", err))
 				} else {
 					alert.Error(fmt.Errorf("Task failed: %w", err), alert.WithTags(msgTags(msg)))
 				}
@@ -483,4 +485,12 @@ func msgTags(msg *transport.Message, merge ...alert.Tags) alert.Tags {
 		}
 	}
 	return t
+}
+
+func logerr(log *slog.Logger, err error) {
+	ref := errutil.Refstr(err)
+	if ref != "" {
+		log = log.With("ref", ref)
+	}
+	log.Error(err.Error())
 }
