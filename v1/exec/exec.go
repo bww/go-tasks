@@ -226,12 +226,14 @@ outer:
 				err = fmt.Errorf("Task type is not supported: %v", msg.Type)
 			}
 			if err != nil {
-				err := errutil.Reference(err)
-				fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> IS THIS HAPPENING?", err, err.Reference())
+				var referr errutil.Referenced
+				if referr = err.(errutil.Referenced); referr == nil { // check the error directly, not the whole chain
+					referr = errutil.Reference(err)
+				}
 				if msg.Type == transport.Oneshot {
-					logerr(log, fmt.Errorf("Task failed: %v", err))
+					logerr(log, fmt.Errorf("Task failed: %v", referr))
 				} else {
-					alert.Error(fmt.Errorf("Task failed: %w", err), alert.WithTags(msgTags(msg)))
+					alert.Error(fmt.Errorf("Task failed: %w", referr), alert.WithTags(msgTags(msg)))
 				}
 				w.report(err)
 			}
