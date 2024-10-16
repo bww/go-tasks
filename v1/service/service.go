@@ -91,7 +91,7 @@ func (s *Service) Run(cxt context.Context) error {
 }
 
 func (s *Service) handleStatus(req *router.Request, cxt router.Context) (*router.Response, error) {
-	return response.Success(struct {
+	return response.JSON(struct {
 		Status string `json:"status"`
 	}{
 		Status: "ok",
@@ -103,8 +103,13 @@ func (s *Service) handleWriteQueue(req *router.Request, cxt router.Context) (*ro
 		return nil, resterrs.Errorf(http.StatusServiceUnavailable, "Task queue is not available")
 	}
 
+	conf, err := tasks.PublishConfigFromParams(req.URL.Query())
+	if err != nil {
+		return nil, resterrs.Errorf(http.StatusBadRequest, "Invalid parameters").SetCause(err)
+	}
+
 	var msg *transport.Message
-	err := httputil.Unmarshal(req, &msg)
+	err = httputil.Unmarshal(req, &msg)
 	if err != nil {
 		return nil, resterrs.Errorf(http.StatusBadRequest, "Could not unmarshal entity").SetCause(err)
 	}
@@ -114,12 +119,12 @@ func (s *Service) handleWriteQueue(req *router.Request, cxt router.Context) (*ro
 	}
 
 	s.log.With("utd", msg.UTD, "size", humanize.Bytes(uint64(len(msg.Data)))).Info("Publish task")
-	err = s.queue.Publish(req.Context(), msg)
+	err = s.queue.Publish(req.Context(), msg, tasks.UseConfig(conf))
 	if err != nil {
 		return nil, resterrs.Errorf(http.StatusBadGateway, "Could not publish task").SetCause(err)
 	}
 
-	return response.Success(msg), nil
+	return response.JSON(msg), nil
 }
 
 func (s *Service) handleExecTask(req *router.Request, cxt router.Context) (*router.Response, error) {
@@ -143,5 +148,5 @@ func (s *Service) handleExecTask(req *router.Request, cxt router.Context) (*rout
 		return nil, resterrs.Errorf(http.StatusBadGateway, "%s", err.Error()).SetCause(err)
 	}
 
-	return response.Success(res), nil
+	return response.JSON(res), nil
 }
