@@ -37,6 +37,12 @@ func (d Delivery) Nack() {
 	}
 }
 
+// Publisher is an abstraction for publishing tasks which both [github.com/bww/go-tasks/v1.Queue]
+// and [github.com/bww/go-tasks/v1/client.Client] conform to.
+type Publisher interface {
+	Submit(context.Context, *transport.Message, ...PublishOption) error
+}
+
 type Queue struct {
 	queue.Queue
 	log worklog.Worklog
@@ -50,28 +56,33 @@ func (q *Queue) Worklog() worklog.Worklog {
 	return q.log
 }
 
-func (q *Queue) Publish(cxt context.Context, m *transport.Message, opts ...PublishOption) error {
+// Submit conforms to Publisher; it has the same effect as Publish in Queue
+func (q *Queue) Submit(cxt context.Context, msg *transport.Message, opts ...PublishOption) error {
+	return q.Publish(cxt, msg, opts...)
+}
+
+func (q *Queue) Publish(cxt context.Context, msg *transport.Message, opts ...PublishOption) error {
 	conf := PublishConfig{
 		StateSeq: 0,
 	}.WithOptions(opts)
 
-	if m.Id == ident.Zero {
-		m.Id = ident.New()
+	if msg.Id == ident.Zero {
+		msg.Id = ident.New()
 	}
-	c, err := m.Encode()
+	c, err := msg.Encode()
 	if err != nil {
 		return err
 	}
 
-	if m.Type == transport.Managed && q.log != nil {
+	if msg.Type == transport.Managed && q.log != nil {
 		ent := &worklog.Entry{
-			TaskId:   m.Id,
-			TaskSeq:  m.Seq,
+			TaskId:   msg.Id,
+			TaskSeq:  msg.Seq,
 			State:    worklog.Pending,
 			StateSeq: conf.StateSeq,
-			UTD:      m.UTD,
-			Data:     m.Data,
-			Attrs:    m.Attrs,
+			UTD:      msg.UTD,
+			Data:     msg.Data,
+			Attrs:    msg.Attrs,
 			Created:  time.Now(),
 		}
 		var err error

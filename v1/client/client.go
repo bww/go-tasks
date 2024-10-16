@@ -4,12 +4,11 @@ import (
 	"context"
 
 	api "github.com/bww/go-apiclient/v1"
+	"github.com/bww/go-tasks/v1"
 	"github.com/bww/go-tasks/v1/transport"
 )
 
-var (
-	jsonContentType = api.WithHeader("Content-Type", "application/json")
-)
+var jsonContentType = api.WithHeader("Content-Type", "application/json")
 
 type Client struct {
 	*api.Client
@@ -23,24 +22,28 @@ func NewWithConfig(conf Config) *Client {
 	}
 }
 
-func (c *Client) Submit(cxt context.Context, msg *transport.Message) error {
+// Submit conforms to tasks.Publisher; it either enqueues the task or executes
+// it synchronously, depending on the configuration of the client.
+func (c *Client) Submit(cxt context.Context, msg *transport.Message, opts ...tasks.PublishOption) error {
 	if c.sync {
-		return c.Execute(cxt, msg)
+		return c.Execute(cxt, msg, opts...)
 	} else {
-		return c.Publish(cxt, msg)
+		return c.Publish(cxt, msg, opts...)
 	}
 }
 
-func (c *Client) Execute(cxt context.Context, msg *transport.Message) error {
-	_, err := c.Client.Post(cxt, "v1/tasks", msg, nil, jsonContentType)
+func (c *Client) Execute(cxt context.Context, msg *transport.Message, opts ...tasks.PublishOption) error {
+	conf := tasks.PublishConfig{}.WithOptions(opts)
+	_, err := c.Post(cxt, "v1/tasks"+conf.Query(), msg, nil, jsonContentType)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) Publish(cxt context.Context, msg *transport.Message) error {
-	_, err := c.Client.Post(cxt, "v1/queue", msg, nil, jsonContentType)
+func (c *Client) Publish(cxt context.Context, msg *transport.Message, opts ...tasks.PublishOption) error {
+	conf := tasks.PublishConfig{}.WithOptions(opts)
+	_, err := c.Post(cxt, "v1/queue"+conf.Query(), msg, nil, jsonContentType)
 	if err != nil {
 		return err
 	}
