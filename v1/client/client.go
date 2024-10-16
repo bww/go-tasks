@@ -3,9 +3,10 @@ package client
 import (
 	"context"
 
-	api "github.com/bww/go-apiclient/v1"
 	"github.com/bww/go-tasks/v1"
 	"github.com/bww/go-tasks/v1/transport"
+
+	api "github.com/bww/go-apiclient/v1"
 )
 
 var jsonContentType = api.WithHeader("Content-Type", "application/json")
