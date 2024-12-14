@@ -7,7 +7,7 @@ require (
 	github.com/bww/go-alert v0.2.1
 	github.com/bww/go-apiclient v0.1.2
 	github.com/bww/go-auth v0.1.2
-	github.com/bww/go-ident v0.1.0
+	github.com/bww/go-ident v0.2.0
 	github.com/bww/go-iterator v0.1.0
 	github.com/bww/go-metrics v0.1.0
 	github.com/bww/go-queue v1.0.0
@@ -26,7 +26,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bww/epl v1.1.1 // indirect
 	github.com/bww/go-ratelimit v0.2.4 // indirect
-	github.com/bww/go-xid v0.1.1 // indirect
+	github.com/bww/go-xid v0.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/getsentry/sentry-go v0.28.0 // indirect
