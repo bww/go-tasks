@@ -22,6 +22,7 @@ type Entry struct {
 	Data     []byte
 	Attrs    attrs.Attributes
 	Error    json.RawMessage
+	Triggers Triggers
 	Retry    bool
 	Created  time.Time
 	Expires  *time.Time
@@ -66,6 +67,7 @@ func (e *Entry) NextWithAttrs(s State, d []byte, a attrs.Attributes) *Entry {
 		UTD:      e.UTD,
 		Data:     d,
 		Attrs:    a,
+		Triggers: e.Triggers,
 		Retry:    e.Retry,
 		Created:  time.Now(),
 	}
@@ -93,6 +95,11 @@ func (e *Entry) SetData(d []byte) *Entry {
 
 func (e *Entry) SetAttrs(a attrs.Attributes) *Entry {
 	e.Attrs = a
+	return e
+}
+
+func (e *Entry) SetTriggers(t Triggers) *Entry {
+	e.Triggers = t
 	return e
 }
 

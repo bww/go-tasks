@@ -16,6 +16,8 @@ func (t Triggers) Value() (driver.Value, error) {
 
 func (t *Triggers) Scan(src interface{}) error {
 	switch c := src.(type) {
+	case nil:
+		return nil
 	case []byte:
 		return json.Unmarshal(c, t)
 	case string:
