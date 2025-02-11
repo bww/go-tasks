@@ -9,6 +9,7 @@ import (
 	"github.com/bww/go-ident/v1"
 	"github.com/bww/go-queue/v1"
 	"github.com/bww/go-tasks/v1/attrs"
+	"github.com/bww/go-tasks/v1/worklog"
 )
 
 var errEncodingNotSupported = errors.New("Encoding is not longer supported")
@@ -27,12 +28,13 @@ const (
 )
 
 type Message struct {
-	Id    ident.Ident      `json:"id"`
-	Seq   int64            `json:"seq"` // generally speaking, don't mess with the sequence
-	Type  Type             `json:"type"`
-	UTD   string           `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
-	Data  []byte           `json:"data,omitempty"`
-	Attrs attrs.Attributes `json:"attrs,omitempty"`
+	Id       ident.Ident      `json:"id"`
+	Seq      int64            `json:"seq"` // generally speaking, don't mess with the sequence
+	Type     Type             `json:"type"`
+	UTD      string           `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
+	Data     []byte           `json:"data,omitempty"`
+	Attrs    attrs.Attributes `json:"attrs,omitempty"`
+	Triggers worklog.Triggers `json:"triggers,omitempty"`
 }
 
 func New(utd string) *Message {
@@ -85,6 +87,30 @@ func (m *Message) SetAttr(k, v string) *Message {
 	}
 	m.Attrs[k] = v
 	return m
+}
+
+func (m *Message) SetTriggers(t worklog.Triggers) *Message {
+	m.Triggers = t
+	return m
+}
+
+func (m *Message) AddTrigger(s worklog.State, utd string) *Message {
+	if m.Triggers == nil {
+		m.Triggers = map[worklog.State][]string{s: {utd}}
+	} else {
+		m.Triggers[s] = append(m.Triggers[s], utd)
+	}
+	return m
+}
+
+func (m *Message) TriggerForState(s worklog.State) (string, worklog.Triggers, bool) {
+	if m.Triggers == nil {
+		return "", nil, false
+	} else if t := m.Triggers[s]; len(t) > 0 {
+		return t[0], worklog.Triggers{s: t[1:]}, true
+	} else {
+		return "", m.Triggers, false
+	}
 }
 
 func (m *Message) Encode() (*queue.Message, error) {

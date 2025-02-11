@@ -40,11 +40,20 @@ func (r *Request) Logger(base *slog.Logger) *slog.Logger {
 }
 
 type Result struct {
+	UTD   string `json:"utd"`
 	State []byte `json:"state"`
 }
 
+func (r Result) WithUTD(u string) Result {
+	d := r
+	d.UTD = u
+	return d
+}
+
 func (r Result) WithState(b []byte) Result {
-	return Result{State: b}
+	d := r
+	d.State = b
+	return d
 }
 
 type Params struct {
