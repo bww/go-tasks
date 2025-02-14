@@ -5,7 +5,7 @@ go 1.23.1
 require (
 	github.com/bww/go-acl v0.2.4
 	github.com/bww/go-alert v0.2.1
-	github.com/bww/go-apiclient v0.1.2
+	github.com/bww/go-apiclient v0.5.0
 	github.com/bww/go-auth v0.1.2
 	github.com/bww/go-ident v0.2.0
 	github.com/bww/go-iterator v0.1.0
