@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bww/go-ident/v1"
 	"github.com/bww/go-queue/v1"
 	"github.com/bww/go-tasks/v1/attrs"
+	"github.com/bww/go-tasks/v1/worklog"
 )
 
 var errEncodingNotSupported = errors.New("Encoding is not longer supported")
@@ -27,12 +29,13 @@ const (
 )
 
 type Message struct {
-	Id    ident.Ident      `json:"id"`
-	Seq   int64            `json:"seq"` // generally speaking, don't mess with the sequence
-	Type  Type             `json:"type"`
-	UTD   string           `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
-	Data  []byte           `json:"data,omitempty"`
-	Attrs attrs.Attributes `json:"attrs,omitempty"`
+	Id       ident.Ident      `json:"id"`
+	Seq      int64            `json:"seq"` // generally speaking, don't mess with the sequence
+	Type     Type             `json:"type"`
+	UTD      string           `json:"utd" check:"len(self) > 0" invalid:"Task UTD is required"`
+	Data     []byte           `json:"data,omitempty"`
+	Attrs    attrs.Attributes `json:"attrs,omitempty"`
+	Triggers worklog.Triggers `json:"triggers,omitempty"`
 }
 
 func New(utd string) *Message {
@@ -87,6 +90,32 @@ func (m *Message) SetAttr(k, v string) *Message {
 	return m
 }
 
+func (m *Message) SetTriggers(t worklog.Triggers) *Message {
+	m.Triggers = t
+	return m
+}
+
+func (m *Message) AddTrigger(s worklog.State, utds ...string) *Message {
+	if len(utds) > 0 {
+		if m.Triggers == nil {
+			m.Triggers = map[worklog.State][]string{s: utds}
+		} else {
+			m.Triggers[s] = append(m.Triggers[s], utds...)
+		}
+	}
+	return m
+}
+
+func (m *Message) TriggerForState(s worklog.State) (string, worklog.Triggers, bool) {
+	if m.Triggers == nil {
+		return "", nil, false
+	} else if t := m.Triggers[s]; len(t) > 0 {
+		return t[0], worklog.Triggers{s: t[1:]}, true
+	} else {
+		return "", m.Triggers, false
+	}
+}
+
 func (m *Message) Encode() (*queue.Message, error) {
 	// only inline encoding is supported now
 	data, err := json.Marshal(m)
@@ -101,6 +130,18 @@ func (m *Message) Encode() (*queue.Message, error) {
 		},
 		Data: data,
 	}, nil
+}
+
+func (m *Message) Entry(state worklog.State, when time.Time) *worklog.Entry {
+	return &worklog.Entry{
+		TaskId:   m.Id,
+		UTD:      m.UTD,
+		State:    state,
+		Data:     m.Data,
+		Attrs:    m.Attrs,
+		Triggers: m.Triggers, // we retain triggers in the initial case
+		Created:  when,
+	}
 }
 
 func (m *Message) String() string {

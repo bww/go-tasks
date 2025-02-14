@@ -314,16 +314,9 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		} else if ent.State == worklog.Running && ent.Valid(now) {
 			return fmt.Errorf("Task is already running since: %v", ent.Created)
 		}
-		next = ent.NextWithAttrs(worklog.Running, msg.Data, msg.Attrs)
+		next = ent.Next(worklog.Running, msg.Data, worklog.WithAttributes(msg.Attrs))
 	} else {
-		next = &worklog.Entry{
-			TaskId:  msg.Id,
-			UTD:     msg.UTD,
-			State:   worklog.Running,
-			Data:    msg.Data,
-			Attrs:   msg.Attrs,
-			Created: now,
-		}
+		next = msg.Entry(worklog.Running, now)
 	}
 
 	err = w.worklog.StoreEntry(cxt, next) // Entry must be initialized
@@ -349,7 +342,7 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		entry:   next,
 	})
 
-	res, err := w.Proc(cxt, msg, next)
+	res, err := w.proc(cxt, msg, next, now)
 	if err == nil {
 		next = next.Next(worklog.Complete, res.State)
 	} else {
@@ -359,6 +352,13 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 			alert.Error(fmt.Errorf("Could not marshal worklog error on failure: %v", suberr), alert.WithTags(msgTags(msg, alert.Tags{"task_seq": fmt.Sprint(next.TaskSeq)})))
 		} else {
 			next = next.SetError(errdat)
+		}
+	}
+
+	if run, enq, ok := msg.TriggerForState(next.State); ok {
+		err := w.queue.Submit(cxt, transport.New(run).SetTriggers(enq))
+		if err != nil {
+			return fmt.Errorf("Could not enqueue dependent task for trigger: %v: %w", run, err)
 		}
 	}
 
@@ -376,12 +376,27 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 }
 
 func (w *Executor) handleOneshot(cxt context.Context, msg *transport.Message, now time.Time) error {
-	_, err := w.Proc(cxt, msg, nil)
-	return err
+	_, err := w.proc(cxt, msg, nil, now)
+	if err != nil {
+		return err
+	}
+
+	state := worklog.Complete
+	if run, enq, ok := msg.TriggerForState(state); ok {
+		err := w.handleOneshot(cxt, transport.New(run).SetTriggers(enq), now)
+		if err != nil {
+			return fmt.Errorf("Could not process dependent task for trigger: %v: %w", run, err)
+		}
+	}
+
+	return nil
 }
 
 func (w *Executor) Proc(cxt context.Context, msg *transport.Message, ent *worklog.Entry) (res tasks.Result, err error) {
-	now := time.Now()
+	return w.proc(cxt, msg, ent, time.Now())
+}
+
+func (w *Executor) proc(cxt context.Context, msg *transport.Message, ent *worklog.Entry, now time.Time) (res tasks.Result, err error) {
 	log := msgLog(w.log, msg)
 	if ent != nil {
 		log = log.With("worklog", ent.String())
