@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bww/go-ident/v1"
 	"github.com/bww/go-queue/v1"
@@ -94,11 +95,13 @@ func (m *Message) SetTriggers(t worklog.Triggers) *Message {
 	return m
 }
 
-func (m *Message) AddTrigger(s worklog.State, utd string) *Message {
-	if m.Triggers == nil {
-		m.Triggers = map[worklog.State][]string{s: {utd}}
-	} else {
-		m.Triggers[s] = append(m.Triggers[s], utd)
+func (m *Message) AddTrigger(s worklog.State, utds ...string) *Message {
+	if len(utds) > 0 {
+		if m.Triggers == nil {
+			m.Triggers = map[worklog.State][]string{s: utds}
+		} else {
+			m.Triggers[s] = append(m.Triggers[s], utds...)
+		}
 	}
 	return m
 }
@@ -127,6 +130,18 @@ func (m *Message) Encode() (*queue.Message, error) {
 		},
 		Data: data,
 	}, nil
+}
+
+func (m *Message) Entry(state worklog.State, when time.Time) *worklog.Entry {
+	return &worklog.Entry{
+		TaskId:   m.Id,
+		UTD:      m.UTD,
+		State:    state,
+		Data:     m.Data,
+		Attrs:    m.Attrs,
+		Triggers: m.Triggers, // we retain triggers in the initial case
+		Created:  when,
+	}
 }
 
 func (m *Message) String() string {

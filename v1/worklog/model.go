@@ -9,6 +9,34 @@ import (
 	"github.com/bww/go-tasks/v1/attrs"
 )
 
+type NextConfig struct {
+	Attrs    attrs.Attributes
+	Triggers Triggers
+}
+
+func (c NextConfig) WithOptions(opts []NextOption) NextConfig {
+	for _, opt := range opts {
+		c = opt(c)
+	}
+	return c
+}
+
+type NextOption func(NextConfig) NextConfig
+
+func WithAttributes(v attrs.Attributes) NextOption {
+	return func(c NextConfig) NextConfig {
+		c.Attrs = v
+		return c
+	}
+}
+
+func WithTriggers(v Triggers) NextOption {
+	return func(c NextConfig) NextConfig {
+		c.Triggers = v
+		return c
+	}
+}
+
 const (
 	AttrRetries = "retries"
 )
@@ -47,17 +75,14 @@ func (e *Entry) Clone() *Entry {
 	return &d
 }
 
-func (e *Entry) Next(s State, d []byte) *Entry {
-	return e.NextWithAttrs(s, d, nil)
-}
-
-func (e *Entry) NextWithAttrs(s State, d []byte, a attrs.Attributes) *Entry {
+func (e *Entry) Next(s State, d []byte, opts ...NextOption) *Entry {
+	// NOTE: triggers do not inherit; do this explicitly if it's what you want
+	conf := NextConfig{
+		Attrs: e.Attrs,
+	}.WithOptions(opts)
 	sseq := e.StateSeq
 	if s != e.State {
 		sseq++ // increment state sequence if the state changes
-	}
-	if a == nil {
-		a = e.Attrs // prefer provided attributes to inherited ones
 	}
 	return &Entry{
 		TaskId:   e.TaskId,
@@ -66,8 +91,8 @@ func (e *Entry) NextWithAttrs(s State, d []byte, a attrs.Attributes) *Entry {
 		StateSeq: sseq,
 		UTD:      e.UTD,
 		Data:     d,
-		Attrs:    a,
-		Triggers: e.Triggers,
+		Attrs:    conf.Attrs,
+		Triggers: conf.Triggers,
 		Retry:    e.Retry,
 		Created:  time.Now(),
 	}

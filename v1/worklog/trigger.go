@@ -11,7 +11,11 @@ import (
 type Triggers map[State][]string
 
 func (t Triggers) Value() (driver.Value, error) {
-	return json.Marshal(t)
+	if len(t) < 1 {
+		return nil, nil
+	} else {
+		return json.Marshal(t)
+	}
 }
 
 func (t *Triggers) Scan(src interface{}) error {

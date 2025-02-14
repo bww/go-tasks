@@ -314,16 +314,9 @@ func (w *Executor) handleManaged(cxt context.Context, msg *transport.Message, no
 		} else if ent.State == worklog.Running && ent.Valid(now) {
 			return fmt.Errorf("Task is already running since: %v", ent.Created)
 		}
-		next = ent.NextWithAttrs(worklog.Running, msg.Data, msg.Attrs)
+		next = ent.Next(worklog.Running, msg.Data, worklog.WithAttributes(msg.Attrs))
 	} else {
-		next = &worklog.Entry{
-			TaskId:  msg.Id,
-			UTD:     msg.UTD,
-			State:   worklog.Running,
-			Data:    msg.Data,
-			Attrs:   msg.Attrs,
-			Created: now,
-		}
+		next = msg.Entry(worklog.Running, now)
 	}
 
 	err = w.worklog.StoreEntry(cxt, next) // Entry must be initialized
